@@ -1097,17 +1097,29 @@ function puzzleRot13(){
   overlay.classList.add('show');
 }
 
+/* DOORS.needs may be a single item name or an array of alternatives
+   (e.g. a legit badge OR a captured-and-replayed signal) */
+function hasDoorItem(needs){
+  if(Array.isArray(needs)) return needs.some(n => state.inventory.includes(n));
+  return state.inventory.includes(needs);
+}
+function whichDoorItem(needs){
+  if(!Array.isArray(needs)) return state.inventory.includes(needs) ? needs : null;
+  return needs.find(n => state.inventory.includes(n)) || null;
+}
+
 /* shared unlock path used by both click and text play */
-function unlockDoor(id, announce){
+function unlockDoor(id, announce, usedItem){
   const d = DOORS[id];
   state.doors[id] = true;
+  const openMsg = (d.openMsgByItem && usedItem && d.openMsgByItem[usedItem]) || d.openMsg;
   if(d.reward){
     addItem(d.reward.item);
     if(announce){ showToast(d.reward.item + ' acquired.'); }
-    if(typeof say === 'function'){ say(d.openMsg, 'good'); say(d.reward.note, 'item'); say('Acquired: ' + d.reward.item, 'item'); }
+    if(typeof say === 'function'){ say(openMsg, 'good'); say(d.reward.note, 'item'); say('Acquired: ' + d.reward.item, 'item'); }
   } else {
     if(announce){ showToast(d.name.charAt(0).toUpperCase()+d.name.slice(1) + ' unlocked.'); }
-    if(typeof say === 'function'){ say(d.openMsg, 'good'); }
+    if(typeof say === 'function'){ say(openMsg, 'good'); }
   }
   // repaint the door node as unlocked
   const scEl = document.getElementById('scene-'+d.room);
@@ -1123,7 +1135,7 @@ function tryDoor(id){
     return;
   }
   if(d.needs === 'code'){ puzzleRot13(); return; }
-  if(state.inventory.includes(d.needs)){ unlockDoor(id, true); if(d.to) setTimeout(()=>goTo(d.to), 900); }
+  if(hasDoorItem(d.needs)){ unlockDoor(id, true, whichDoorItem(d.needs)); if(d.to) setTimeout(()=>goTo(d.to), 900); }
   else { showToast(d.noToolMsg); say(d.noToolMsg, 'bad'); }
 }
 
@@ -1359,8 +1371,8 @@ function runCommand(raw){
       if(!d){ say('There is no lock like that here.', 'bad'); return; }
       if(state.doors[d]){ say('Already open.', 'sys'); return; }
       if(DOORS[d].needs === 'code'){ say('This one is not a lock you can pick — it wants a code.', 'bad'); return; }
-      if(!state.inventory.includes(DOORS[d].needs)){ say(DOORS[d].noToolMsg, 'bad'); return; }
-      unlockDoor(d, false); return;
+      if(!hasDoorItem(DOORS[d].needs)){ say(DOORS[d].noToolMsg, 'bad'); return; }
+      unlockDoor(d, false, whichDoorItem(DOORS[d].needs)); return;
     }
     case 'decode': case 'rot13': case 'rot': {
       if(!state.inventory.includes('ROT13 Crib Sheet')){
@@ -1442,8 +1454,8 @@ function runCommand(raw){
         if(d){
           if(state.doors[d]){ say('Already open.', 'sys'); return; }
           if(DOORS[d].needs === 'code'){ say('It wants a code. Try SOLVE, or CODE <word>.', 'sys'); return; }
-          if(!state.inventory.includes(DOORS[d].needs)){ say(DOORS[d].noToolMsg, 'bad'); return; }
-          unlockDoor(d, false); return;
+          if(!hasDoorItem(DOORS[d].needs)){ say(DOORS[d].noToolMsg, 'bad'); return; }
+          unlockDoor(d, false, whichDoorItem(DOORS[d].needs)); return;
         }
       }
       say('Open what?', 'bad'); return;
@@ -2845,10 +2857,13 @@ function wireGear(){
 
   // ---- the checkpoint: present the badge to actually get in ----
   DOORS.checkpoint = {
-    room:'security', to:'atrium', name:'entrance checkpoint', needs:'Attendee Badge',
+    room:'security', to:'atrium', name:'entrance checkpoint', needs:['Attendee Badge','Captured Badge Signal'],
     lockedMsg:"Two guards watch the turnstile. Nobody gets past without a badge to present.",
     noToolMsg:"You pat your jacket down. No badge — you cannot get in without presenting one. Someone in the Linecon queue outside might know where to get one.",
     openMsg:'You hold up the badge. The nearer guard scans it, nods, and waves you through the turnstile.',
+    openMsgByItem:{
+      'Captured Badge Signal':'You hold the Flipper against the scanner and replay the captured signal. The turnstile beeps green for a name that is not yours; the guard glances at the screen, shrugs, and waves the next person through.',
+    },
   };
   (function(){
     const secScene = scenes.find(s=>s.id==='security');
@@ -3381,6 +3396,240 @@ function wireAtriumDepth(){
      note:'A wall panel cycles stats nobody asked for: current attendee count, Wall of Sheep hit rate, number of badges still unsolved, and a rotating "DO NOT" list (do not scan the AP names for fun, do not plug the drone into anything, do not ask the goons what BLACKICE stands for). Someone has taped a sticky note under it: "the real status board is whoever is loudest in the hallway."'});
 }
 wireAtriumDepth();
+
+/* ============================================================
+   EXPANSION: the Flipper — a rare capture/replay tool
+   One in ten site visits, the Flipper is "in the building" this
+   session at all. Getting one still requires talking to Solder
+   Witch about it; if this visit didn't roll it, she teaches the
+   same real material, she just doesn't have a spare unit on her.
+   Once carried, it lets a player capture a badge signal at the
+   RFID village and replay it wherever a badge would normally be
+   checked -- the checkpoint, and the biometric staff door.
+   ============================================================ */
+const FLIPPER_AVAILABLE = Math.random() < 0.1;
+
+function wireFlipper(){
+  Object.assign(NPCS.solderwitch.topics, {
+    flipper:['capture/replay attacks',
+      '"Flipper Zero. Portable multi-tool — sub-GHz radio, 125kHz and 13.56MHz RFID/NFC, infrared, Bluetooth LE, GPIO, iButton. It reads a signal, stores it, and plays it back on command. That is the entire trick behind a replay attack: you are not breaking the cipher, you are just recording the legitimate answer and repeating it later."',
+      '"It is legitimately controversial hardware — a few countries and venues have banned carrying one, because the same read/clone/emulate loop that makes it a great pentesting tool also opens garage doors and car remotes that were never designed to resist it. Ours are demo units, badge-village-safe, no felonies included."'],
+  });
+  NPCS.solderwitch.fallback = '"Not my area. Ask me about the badge, the Baochip, IRIS, the AES argument, or capture/replay attacks."';
+
+  const _markAskedFlipper = markAsked;
+  markAsked = function(key, tk){
+    _markAskedFlipper(key, tk);
+    if(key==='solderwitch' && tk==='flipper' && !state.inventory.includes('Flipper')){
+      if(FLIPPER_AVAILABLE){
+        addItem('Flipper');
+        say('Solder Witch digs through a tool roll and comes up with a battered orange-and-white unit. "Here — I brought three, everyone keeps asking. Bring it back to a swap meet when you are done, or do not, I have more."', 'good');
+        say('Acquired: Flipper', 'item');
+      } else {
+        say('"I only had the one demo unit and somebody already walked off with it," Solder Witch says. "You did not hear this from me, but the badge village usually has a spare if you ask nicely — some visits, anyway."', 'sys');
+      }
+    }
+  };
+
+  // ---- capture point: the RFID village hums with traffic worth listening to ----
+  scenes.find(s=>s.id==='rfidtable').hs.push(
+    {x:75, y:70, type:'item', label:'Listen to the room',
+     note:'Readers chirping, NFC demo stations buzzing, someone\'s access card getting cloned two tables over for a workshop. If you had something that could listen in on all of this, this is exactly the room for it. Try SNIFF.'});
+  EXTRA_VERBS['sniff'] = ()=>{
+    if(state.current !== 'rfidtable'){ say('Nothing worth sniffing here.', 'bad'); return; }
+    if(!state.inventory.includes('Flipper')){ say('You have nothing that could listen in on RF traffic.', 'bad'); return; }
+    if(state.inventory.includes('Captured Badge Signal')){ say('You already captured a clean signal. No sense pushing your luck twice in one room.', 'sys'); return; }
+    addItem('Captured Badge Signal');
+    say('You let the Flipper listen for a few seconds and it locks onto a clean 125kHz read — somebody\'s valid credential, copied wholesale, no cipher involved because there was never a cipher to begin with.', 'good');
+    say('Acquired: Captured Badge Signal', 'item');
+    if(!state.solved.rfid){
+      state.solved.rfid = true;
+      addItem('Practice Badge');
+      say('It also answers the reader\'s own question for you: the bytes came back 0x2C 0xFF, same mislabelled GUEST card from the practice puzzle. You never had to guess.', 'desc');
+      say('Acquired: Practice Badge', 'item');
+      markSolved('rfidtable','rfid');
+    }
+  };
+
+  // ---- replay: usable at the checkpoint (mirrors PRESENT) and the biometric door ----
+  EXTRA_VERBS['replay'] = ()=>{
+    if(state.current === 'security'){ tryDoor('checkpoint'); return; }
+    if(state.current === 'biometric'){
+      if(state.solved.vigenere){ say('The plate has already spoken. The door is open.', 'sys'); return; }
+      if(!state.inventory.includes('Flipper')){ say('You have nothing to replay with.', 'bad'); return; }
+      if(!state.inventory.includes('Captured Badge Signal')){ say('You would need a captured signal first — the RFID village hums with exactly that, if you have something to listen with.', 'bad'); return; }
+      state.solved.vigenere = true;
+      state.doors.staffdoor = true;
+      addItem('Staff Corridor Access');
+      say('You do not bother with the cipher. The palm reader is theatre; underneath the glow it is just another RFID reader wearing a costume. You replay the captured signal and the door clicks anyway.', 'good');
+      say('Somewhere behind the palm reader, MOOSE and THROWERS stay exactly as unsolved as they were a second ago. The lock never cared.', 'desc');
+      say('Acquired: Staff Corridor Access', 'item');
+      if(!ROOM.biometric.exits.n){
+        ROOM.biometric.exits.n = 'corridor';
+        addHotspot('biometric', {x:50,y:22,type:'nav',to:'corridor',label:'Through the staff door'});
+        if(typeof revealNodes === 'function' && surveyed['biometric']) revealNodes('biometric');
+        say('The staff door swings open onto a bare service corridor running north.', 'sys');
+      }
+      markSolved('biometric','vigenere');
+      return;
+    }
+    say('Nothing here to replay a signal at.', 'bad');
+  };
+
+  Object.assign(LORE, {
+    flipper:`<b>Flipper Zero</b> — an open-source portable multi-tool for hardware pentesting: sub-GHz radio, 125kHz/NFC RFID, infrared, Bluetooth LE, GPIO and iButton, all in one device that can read, store, and replay a captured signal. The same capability that makes it a legitimate security-research tool has gotten it banned from a handful of countries and venues, since the identical read/clone/emulate loop works just as well on garage doors and car key fobs that were never designed to resist it.`,
+    replayattack:`<b>Replay attacks</b> — the simplest class of attack against weak authentication: don't break the cipher, just record a legitimate signal and play it back later. Effective against any system that reuses static credentials (many older RFID/NFC badges, some remote keyless entry) and defeated entirely by systems using rolling codes or challenge-response, which is why modern access control has mostly moved toward the latter.`,
+  });
+}
+wireFlipper();
+
+
+/* ============================================================
+   EXPANSION: two new rooms — Social Engineering Village and
+   the Afterparty. Wired with the same hang-a-room-off-an-
+   existing-one pattern the original expansion used, rather than
+   piling more exits onto the atrium.
+   ============================================================ */
+function linkRoom(from, dir, to, label){
+  const NODEPOS = { n:[50,20], s:[50,88], e:[88,50], w:[12,50],
+                    ne:[85,24], nw:[15,24], se:[85,80], sw:[15,80] };
+  const BACKDIR = { n:'s', s:'n', e:'w', w:'e', ne:'sw', sw:'ne', nw:'se', se:'nw' };
+  ROOM[from].exits[dir] = to;
+  const p = NODEPOS[dir] || [50,50];
+  addHotspot(from, {x:p[0], y:p[1], type:'nav', to:to, label:label});
+  const bd = BACKDIR[dir];
+  ROOM[to].exits = ROOM[to].exits || {};
+  ROOM[to].exits[bd] = from;
+  ROOM[to].exits.out = from;
+}
+
+function wireNewRooms(){
+  /* ---- Social Engineering Village ---- */
+  scenes.push({
+    id:'sevillage', name:'Social Engineering Village', look:'amber',
+    hs:[
+      {x:78, y:65, type:'item', label:'Read the wall of "objectives" sheets',
+       note:'Redacted OSINT report templates pinned to a corkboard: twenty-five small facts about a target company, gathered legally from public sources, each one worth points toward a live call nobody at the target company agreed to.'},
+    ],
+  });
+  buildSceneDOM(scenes[scenes.length-1]);
+  ROOM.sevillage = { desc:"A soundproof booth sits at the center of the room, glass-walled, a single chair and a headset inside. Outside it, rows of folding chairs face a projector screen relaying the call live — timer counting up, a scoreboard of \"objectives\" being checked off one at a time.",
+    exits:{} };
+  linkRoom('lounge', 'se', 'sevillage', 'Social Engineering Village');
+
+  NPCS.vishcoach = {
+    name:'the coach', room:'sevillage', at:[22,60],
+    look:'Someone with a headset around their neck and a clipboard, watching the booth with the specific stillness of a person who has done this call themselves.',
+    greeting:'"Won their category two years ago. Now I just watch other people\'s hands shake instead of mine."',
+    topics:{
+      secvc:['the competition',
+        '"Social Engineering Community Vishing Competition. Teams get a target company weeks out — legally, ethically, nothing shady — and build an OSINT report: twenty-five objectives, facts about the org they can find in public sources. Then they get a soundproof booth, a phone, and an audience, and they call the company live and try to talk their way to those same facts."',
+        '"No calling real people without consent outside the contest — that line matters more than anything else in this room. Inside the contest, the target org has agreed to be tested. That is the whole reason this is legal and educational instead of just illegal."'],
+      pretext:['pretexting',
+        '"A pretext is the story you are inside of. \'IT support doing a routine audit.\' \'New vendor confirming a delivery window.\' \'The boss\'s assistant, running behind.\' The best ones are boring. Nobody double-checks boring."',
+        '"Authority, urgency, and familiarity are the three levers almost every pretext pulls. Somebody with power, a reason it has to be now, and a reason you should already trust them. Spot those three in a phone call — any phone call — and you are already ahead of most people."'],
+      coach:['being a coach',
+        '"Win your category and they ask you back the next year to coach instead of compete. Same skill, different direction — instead of getting someone to hand over information, you are trying to get a stranger to sound calm enough on stage that they do not talk themselves out of the thing they already know how to do."'],
+      defense:['defending against this',
+        '"The unglamorous fix: call-back verification. Somebody claims to be IT, you hang up and call the real IT number from the directory, not the one they gave you. It defeats almost every pretext in this room and almost nobody\'s process actually requires it."'],
+    },
+    fallback:'"Ask me about the competition, pretexting, coaching, or how you would actually defend against this."'
+  };
+  addHotspot('sevillage', {x:22, y:60, type:'npc', npc:'vishcoach', label:'Talk to the coach'});
+
+  Object.assign(LORE, {
+    secvc:`<b>Social Engineering Community Vishing Competition (SECVC)</b> — run by the Social Engineering Community (se.community) at DEF CON. Teams research a target organization for weeks, compiling a legal, public-sources-only OSINT report of 25 "objectives," then place live vishing calls from a soundproof booth in front of a judged audience, scored on how many objectives they extract. Past winners are frequently invited back the following year as Vishing Coaches.`,
+    pretexting:`<b>Pretexting</b> — inventing a plausible scenario/identity to manipulate a target into an action or disclosure. Effective pretexts are usually mundane rather than dramatic, and typically lean on some combination of claimed authority, manufactured urgency, and false familiarity. The most reliable organizational defense is mandatory call-back verification through an independently sourced number, not the one the caller provides.`,
+  });
+
+  /* ---- puzzle: identify the levers in a real-style vishing pretext ---- */
+  definePuzzle({
+    id:'vishing', kind:'multi', room:'sevillage', hotspot:[50,45,'Sit in on the vishing booth'],
+    title:'Sit In On The Booth',
+    intro:'Through the glass, you catch the caller\'s side, paraphrased on the live-transcript screen: "Hi, this is Alex from corporate IT — we\'re finishing a security audit before the board meeting THIS AFTERNOON, and I just need you to confirm the badge reader firmware version on your floor real quick, I know you\'re busy, this\'ll take ten seconds." Which levers is the caller actually pulling?',
+    options:[
+      {text:'Claimed authority ("corporate IT")', yes:true},
+      {text:'Manufactured urgency ("this afternoon")', yes:true},
+      {text:'Minimization to lower resistance ("ten seconds," "I know you\'re busy")', yes:true},
+      {text:'A technical exploit against the badge reader itself', yes:false},
+    ],
+    reward:'Vishing Village Coin',
+    lesson:'Nothing here is technical — no exploit touched the badge reader. Every word of it is a lever aimed at the person answering the phone: borrowed authority, a deadline that isn\'t real, and a minimization that makes saying no feel like the awkward option.',
+    verb:'levers', argHint:'<letters>',
+    hint:'The coach already named the three big ones. Count how many of them showed up in that one sentence.',
+  });
+  ALL_PUZZLES.push('vishing');
+  PUZZLE_NAMES.vishing = 'Vishing booth';
+
+  /* ---- The Afterparty ---- */
+  scenes.push({
+    id:'afterparty', name:'The Afterparty', look:'graffiti',
+    hs:[
+      {x:70, y:70, type:'item', label:'Take a sticker off the DJ table',
+       note:'Not an official con event — someone just booked a suite, brought a mixer, and put the room number on a sticky note near the swag table two days ago. This is how most of the actual afterparties happen. The badge on the door reads UNSANCTIONED, UNBOTHERED.',
+       gives:'Afterparty Wristband'},
+    ],
+  });
+  buildSceneDOM(scenes[scenes.length-1]);
+  ROOM.afterparty = { desc:"Bass through cheap hotel-room speakers, string lights taped to a mirror, and a couch that has hosted more debugging sessions than the CTF floor. Half the room is still wearing badges. Nobody is talking about work, which somehow means everybody is.",
+    exits:{} };
+  linkRoom('chillout', 'sw', 'afterparty', 'The Afterparty (unofficial)');
+
+  NPCS.oldtimer = {
+    name:'the old timer', room:'afterparty', at:[42,55],
+    look:'Someone nursing a warm drink on the couch, badge ribbons trailing down to their knees, watching the room with the specific fondness of someone who has done this a couple dozen times.',
+    greeting:'"First one? You can always tell. You are still wearing the lanyard like it might mean something at the door."',
+    topics:{
+      firstcon:['their first con',
+        '"Mine was in a hotel with a broken elevator and a con badge you could not scan because nobody had scanners yet. We are talking real analog. You wrote your handle in Sharpie and hoped somebody remembered it."',
+        '"The villages did not exist yet, not like this. It was a talk track and a hallway and whoever you happened to be standing next to. Some of what makes this place work has not changed even a little."'],
+      badges:['badge culture',
+        '"Every ribbon on this lanyard is a story somebody wanted to keep proof of. Speaker, goon, CTF finalist, \'I fixed something in the NOC at 3am and nobody asked me to.\' Nobody hands these out. You just start wearing the ones people give you."'],
+      changed:['what changed',
+        '"The villages got serious. The talks got more corporate, the hallway got less. The parties got safer, which is mostly good and a little bit sad, if I am honest. And there are kids here now who grew up on this instead of finding it — that part is entirely good, no asterisk."'],
+      advice:['advice for next year',
+        '"Go to one village you know nothing about. Talk to one stranger who looks more nervous than you. Sleep more than you plan to and less than you should. And write down the thing that surprised you most this trip, because by February you will have forgotten it happened at all."'],
+    },
+    fallback:'"Ask me about my first con, badge culture, what has changed, or advice for next year."'
+  };
+  addHotspot('afterparty', {x:42, y:55, type:'npc', npc:'oldtimer', label:'Talk to the old timer'});
+
+  Object.assign(HINTS, {
+    sevillage:'Sit in on the booth and watch the transcript. The coach can tell you what to listen for, if you ask.',
+    afterparty:'Nothing to solve here — just talk to the old timer and take a sticker if you want one.',
+  });
+
+  autoLayoutMap(); // position the two new rooms; leaves every existing position untouched
+}
+wireNewRooms();
+
+
+/* ============================================================
+   EXPANSION: NPCs notice what you're carrying. Greetings update
+   the moment a notable item enters your inventory, so the world
+   reacts to progress instead of staying static all con long.
+   ============================================================ */
+function wireReactivity(){
+  const _addItemReactive = addItem;
+  addItem = function(name){
+    const had = state.inventory.includes(name);
+    _addItemReactive(name);
+    if(had) return;
+    if(name === 'Black Badge' && NPCS.nyx){
+      NPCS.nyx.greeting = '"Is that a black badge? People who get those usually stop talking to strangers in hallways. Ask me anything — I mean it, more than I did an hour ago."';
+    }
+    if(name === 'Flipper' && NPCS.packetwolf){
+      NPCS.packetwolf.greeting = '"Is that a Flipper clipped to your bag? Half this crowd loves those, the other half pretends they do not own one. Ask me about agents if you want — but I have questions of my own now."';
+    }
+    if(name === 'PITCHBOT System Prompt' && NPCS.vishcoach){
+      NPCS.vishcoach.greeting = '"Heard you got PITCHBOT to hand over its own instructions. Same skill as everyone who sits in that booth, aimed at a different kind of target. A system trusting input it should not is a system trusting input it should not — doesn\'t matter if the system is a language model or a guy answering phones."';
+    }
+    if(name === 'Captured Badge Signal' && NPCS.solderwitch){
+      NPCS.solderwitch.greeting = '"You actually caught one. Careful where you point that — the whole reason this stuff is legal in here is that everyone in the badge village consented to being practice."';
+    }
+  };
+}
+wireReactivity();
 
 
 /* --- terminal wiring --- */
