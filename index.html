@@ -2712,11 +2712,42 @@ function wireGear(){
   // ---- Con Companion App: starting item, always in your pocket ----
   if(!state.inventory.includes('Con Companion App')) addItem('Con Companion App');
 
-  // ---- Attendee Badge: picked up at Security ----
-  scenes.find(s=>s.id==='security').hs.push(
-    {x:22,y:55,type:'item',label:'Present your ID at the scanner',
-     note:'The scanner prints a lanyard on the spot: a plastic card that says ATTENDEE in block letters, a QR code, and a name field you never filled in. This is what actually gets you past the rope.',
-     gives:'Attendee Badge'});
+  // ---- Attendee Badge: earned by talking to someone in the Linecon queue ----
+  (function(){
+    const ext = scenes.find(s=>s.id==='exterior77');
+    const talkHs = (ext.hs||[]).find(h=>h.label==='Talk to the person ahead of you');
+    if(talkHs) talkHs.gives = 'Attendee Badge';
+  })();
+
+  // ---- the checkpoint: present the badge to actually get in ----
+  DOORS.checkpoint = {
+    room:'security', to:'atrium', name:'entrance checkpoint', needs:'Attendee Badge',
+    lockedMsg:"Two guards watch the turnstile. Nobody gets past without a badge to present.",
+    noToolMsg:"You pat your jacket down. No badge — you cannot get in without presenting one. Someone in the Linecon queue outside might know where to get one.",
+    openMsg:'You hold up the badge. The nearer guard scans it, nods, and waves you through the turnstile.',
+  };
+  (function(){
+    const secScene = scenes.find(s=>s.id==='security');
+    const navHs = (secScene.hs||[]).find(h=>h.type==='nav' && h.to==='atrium');
+    if(navHs){
+      navHs.type = 'door'; navHs.door = 'checkpoint'; delete navHs.to;
+      // the DOM node for this hotspot was already built with the old (nav) class;
+      // fix it up directly so it gets the violet door styling + locked/unlocked state
+      const scEl = document.getElementById('scene-security');
+      if(scEl){
+        scEl.querySelectorAll('.hotspot').forEach(el=>{
+          if(el._data === navHs) el.className = 'hotspot door';
+        });
+      }
+    }
+  })();
+  ROOM.security.locks = Object.assign({}, ROOM.security.locks, {n:'checkpoint', in:'checkpoint'});
+  EXTRA_VERBS['present'] = ()=>{
+    if(state.current !== 'security'){ say('Nothing to present here.', 'bad'); return; }
+    tryDoor('checkpoint');
+  };
+  HINTS.exterior77 = 'Three people are in this queue with nothing to do but talk. Start with the person right ahead of you — that is where a badge actually comes from.';
+  HINTS.security = 'The turnstile will not open for nothing. PRESENT your badge — or click the checkpoint — once you actually have one.';
 
   // ---- Field Multitool + Thermal Camera: hardware village tool bin ----
   scenes.find(s=>s.id==='hwvillage').hs.push(
