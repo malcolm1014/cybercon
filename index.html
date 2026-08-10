@@ -427,8 +427,12 @@ function attachBackdrop(div, sc){
       const tint = document.createElement('div');
       tint.className = 'bgwrap bgtint';
       tint.style = LOOKS[sc.look] || LOOKS.neon;
-      div.insertBefore(tint, div.firstChild);
-      div.insertBefore(photo, div.firstChild);
+      // photo + tint must paint ABOVE the plain color-gradient div (div's original
+      // first child) — insert them right after it, not before, or the opaque
+      // gradient (later in DOM order = painted on top) hides the photo entirely.
+      const bgEl = div.firstChild;
+      div.insertBefore(photo, bgEl.nextSibling);
+      div.insertBefore(tint, photo.nextSibling);
       const sig = div.querySelector('.sig');
       if(sig) sig.style.opacity = '0.35';                       // art wins over the icon
     };
