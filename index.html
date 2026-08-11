@@ -3948,6 +3948,48 @@ function wireWordBank(){
 wireWordBank();
 
 /* ============================================================
+   EXPANSION: DEF CON's own history folded into the same word bank --
+   the 1993 founding accident, the Alexis Park years, and the
+   self-governing traditions (Goons, cash registration, Capture the
+   Flag, badgelife) that built the culture. Same ELIZA keyword scan,
+   same rule: NPC-specific topics still win first.
+   ============================================================ */
+CON_LORE_BANK.push(
+  { id:'defcon1', patterns:['def con 1','defcon 1','first def con','def con 1993','farewell party'],
+    lines:['"DEF CON was supposed to be a going-away party. Jeff Moss was throwing it for a friend on Platinum Net, a Canadian phreak-and-hacker BBS network, who was about to leave the country. The friend left early instead, guest of honor gone before the party happened. Moss had the invitations out already, so he just had it anyway. About a hundred people showed up to the Sands in June of \'93 for twelve talks and folding chairs. Nobody involved thought there\'d be a DEF CON 2."'] },
+  { id:'defconname', patterns:['def con name','defcon name','why is it called def con','wargames'],
+    lines:['"The name is a double reference. DEFCON is the military readiness scale from WarGames, the \'83 movie where a computer nearly starts a nuclear war — DEFCON 1 is the worst it gets, and Vegas gets namechecked onscreen as a target. And DEF is also 3 on a phone keypad, a nod to the phone phreaks who made up half that first room before there was a room."'] },
+  { id:'jeffmoss', patterns:['jeff moss','the dark tangent','dark tangent bio'],
+    lines:['"Jeff Moss. The Dark Tangent — a handle he only has because he misremembered a comic book called D\'Arc Tangent, and it stuck harder than the real name would have. Started DEF CON at eighteen out of a cancelled party and never really stopped running it. Founded Black Hat in \'97 as the suit-and-tie sibling conference. Later spent a few years as ICANN\'s VP and Chief Security Officer, and sat on the DHS Advisory Council for over a decade. Still the one who picks DEF CON\'s theme every year."'] },
+  { id:'alexispark', patterns:['alexis park'],
+    lines:['"Alexis Park. DEF CON 7 through 13 — 1999 to 2005, seven years running. All-suite resort, low buildings instead of a tower, no casino floor, three outdoor pools. That sprawl is basically why villages exist as a format: there was no single big show floor to put everything on, so the con just spread sideways into rooms across the property instead. Everyone who was there talks about it like a different animal from the convention-center years."'] },
+  { id:'defconvenues', patterns:['def con venues','def con locations','moved to the riviera','rio def con','caesars forum','def con moved'],
+    lines:['"The venue list is basically a growth chart. The Sands in \'93, a run of smaller hotels through the 90s, Alexis Park \'99 to \'05, the Riviera \'06 through \'12, the Rio \'13 to \'16, Paris and Bally\'s \'17 to \'19, virtual in 2020, Caesars Forum ever since. Every single move happened because the con outgrew the last building, never because anyone wanted to leave it."'] },
+  { id:'goons', patterns:['goons','goon','red shirts'],
+    lines:['"Goons. The entire con runs on volunteer labor — staff, network operations, photo and video, crowd control, all of it. Red shirt, a handle instead of a name tag. The shirt design changes every year and is never sold, only earned by working. Put in ten years of it and you get a gold badge: free entry, for life."'] },
+  { id:'ctf1996', patterns:['def con ctf history','first ctf','capture the flag origin','ctf 1996'],
+    lines:['"Capture the Flag started in \'96, DEF CON 4, and it was basically damage control. The year before, someone had thrown the whole con network wide open and it turned into total chaos — so the goons built a sanctioned version of that chaos with actual rules attached. AJ Reznor won the first one. No real scoring platform, no paid staff, just volunteers running it by hand for years before it became the discipline it is now."'] },
+  { id:'hackerjeopardy', patterns:['hacker jeopardy'],
+    lines:['"Hacker Jeopardy. Running since DEF CON 3 in \'95 — the oldest contest at the con by a wide margin. Winn Schwartau hosted it for close to two decades before handing off the mic in 2012 and staying on as executive producer. Real trivia categories, and a house rule that alcohol is basically mandatory fuel for whoever\'s in the hot seat."'] },
+  { id:'electronicbadge', patterns:['electronic badge','badgelife','def con badge history'],
+    lines:['"DEF CON 14, 2006, is where badges stopped being laminated cardstock. Joe Grand — Kingpin — built the first electronic puzzle badge, something you were meant to hack, not just wear. That cracked open badgelife: a whole indie scene of people designing, soldering, and selling their own working circuit-board badges every year since."'] },
+  { id:'defconcash', patterns:['pay cash def con','cash registration','anonymous registration','no id def con'],
+    lines:['"You can still walk up to DEF CON registration with cash and no name attached to anything. That\'s not nostalgia, it\'s policy — a warrant can\'t hand over personal information the con never collected in the first place. Online pre-reg exists now for people who need a receipt for work, but the line that takes cash and gives you nothing back but a badge has never gone away."'] }
+);
+
+function wireDefconWordBank(){
+  Object.assign(LORE, {
+    alexispark:`<b>Alexis Park Resort</b> — DEF CON's home for seven consecutive years, DEF CON 7 through DEF CON 13 (1999–2005). An all-suite, low-rise Las Vegas resort with no casino floor, three outdoor pools, and a sprawling multi-building layout — a structural quirk widely credited with pushing the con toward its "village" format, since there was no single hall large enough for one show floor. Preceded by the Sands and a run of smaller-hotel years in the 1990s; DEF CON outgrew it after 2005 and moved to the Riviera.`,
+    defconvenues:`<b>DEF CON's venues</b>, in order — the Sands Hotel (1993), a run of smaller Las Vegas hotels through the 1990s, the Alexis Park Resort (1999–2005), the Riviera (2006–2012), the Rio (2013–2016), Paris and Bally's (2017–2019), a fully virtual DEF CON Safe Mode (2020), and Caesars Forum (2021–present). Each move followed the con outgrowing the last building.`,
+    goons:`<b>Goons</b> — DEF CON's all-volunteer staff, covering everything from Capture the Flag administration to crowd control to the network operations center. Identified by red shirts and handles rather than names; shirt designs change every year and are never sold, only earned through service. Goons who reach ten years of service receive a gold badge, granting free admission for life.`,
+    hackerjeopardy:`<b>Hacker Jeopardy</b> — DEF CON's oldest running contest, a tradition since DEF CON 3 in 1995. An irreverent, alcohol-fueled parody of the TV game show, hosted for most of its run by security researcher Winn Schwartau, who stepped back from hosting in 2012 and continued on as executive producer.`,
+    badgelife:`<b>Badgelife</b> — the independent scene of hackers designing, fabricating, and selling their own working electronic circuit-board badges, traced back to Joe Grand ("Kingpin") introducing DEF CON's first electronic puzzle badge at DEF CON 14 in 2006. Grand designed the official badge through 2010 before passing the role to LosT; badgelife itself grew into a parallel economy of independent badge makers selling at the con each year.`,
+    jeffmoss:`<b>Jeff Moss ("The Dark Tangent")</b> — founded DEF CON in 1993 at age 18, after a friend's going-away party fell through and he opened the invitation to every hacker group he could reach. His handle is a misremembering of the comic book <i>D'Arc Tangent</i>. Founded Black Hat in 1997; served as VP and Chief Security Officer of ICANN (2011–2013) and as an advisor on the US Department of Homeland Security Advisory Council (2009–2020). Still directs DEF CON today.`,
+  });
+}
+wireDefconWordBank();
+
+/* ============================================================
    EXPANSION: ambient scene animation. The photo backgrounds stay
    completely still; a handful of small regions on top of them
    don't -- a terminal flickers, a bank of camera monitors scans,
