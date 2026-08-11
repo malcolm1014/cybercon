@@ -200,6 +200,36 @@
   .bslot.filled .blet{color:var(--amber);}
   .bslot.filled .bnum{color:var(--amber);opacity:.7;}
   .bslotlabel{font-size:10px;letter-spacing:.12em;color:var(--dim);margin-top:12px;text-transform:uppercase;}
+
+  /* ---- ambient scene FX: small animated overlays on an otherwise-static
+     photo -- terminals flicker, cameras scan, lights pulse, LEDs blink.
+     The photo itself never moves; only these small regions do. ---- */
+  .fxlayer{ position:absolute; pointer-events:none; mix-blend-mode:screen; }
+  .fx-terminal{
+    background: repeating-linear-gradient(0deg, rgba(95,224,138,.35) 0px, rgba(95,224,138,.35) 1px, transparent 1px, transparent 3px);
+    animation: fxTerminalFlicker 2.6s steps(1) infinite;
+  }
+  @keyframes fxTerminalFlicker{
+    0%,100%{opacity:.55;} 4%{opacity:.15;} 8%{opacity:.6;} 22%{opacity:.4;}
+    23%{opacity:.65;} 51%{opacity:.3;} 52%{opacity:.6;} 78%{opacity:.2;} 79%{opacity:.55;}
+  }
+  .fx-camera{
+    background: linear-gradient(180deg, transparent 0%, rgba(120,200,255,.55) 45%, transparent 55%);
+    background-size: 100% 300%;
+    animation: fxScan 3.2s linear infinite;
+  }
+  @keyframes fxScan{ 0%{background-position:0 0;} 100%{background-position:0 300%;} }
+  .fx-light{
+    background: radial-gradient(circle, var(--fxcolor, #5fe08a) 0%, transparent 70%);
+    animation: fxPulse 2.4s ease-in-out infinite;
+  }
+  @keyframes fxPulse{ 0%,100%{opacity:.25;} 50%{opacity:.85;} }
+  .fx-blip{
+    background: var(--fxcolor, #ff3ec9); border-radius:50%;
+    box-shadow: 0 0 8px 2px var(--fxcolor, #ff3ec9);
+    animation: fxBlink 1.3s steps(1) infinite;
+  }
+  @keyframes fxBlink{ 0%,49%{opacity:1;} 50%,100%{opacity:.08;} }
 </style>
 </head>
 <body>
@@ -455,10 +485,31 @@ function attachBackdrop(div, sc){
       div.insertBefore(tint, photo.nextSibling);
       const sig = div.querySelector('.sig');
       if(sig) sig.style.opacity = '0.35';                       // art wins over the icon
+      renderFx(div, sc);
     };
     probe.onerror = tryNext;
     probe.src = url;
   })();
+}
+
+/* small animated overlays (terminal flicker, camera scan, light pulse, LED
+   blink) on top of an otherwise-static photo. Independent of image loading
+   so it can also be called after the fact for scenes whose backdrop already
+   rendered before fx was defined for them. */
+function renderFx(div, sc){
+  if(!sc.fx || !sc.fx.length) return;
+  if(div.querySelector('.fxlayer')) return;                    // already rendered, don't duplicate
+  const tint = div.querySelector('.bgtint');
+  const insertPoint = tint ? tint.nextSibling : (div.firstChild ? div.firstChild.nextSibling : null);
+  sc.fx.forEach(fx=>{
+    const el = document.createElement('div');
+    el.className = 'fxlayer fx-' + fx.type;
+    el.style.left = fx.x + '%'; el.style.top = fx.y + '%';
+    el.style.width = (fx.w || 8) + '%'; el.style.height = (fx.h || 8) + '%';
+    if(fx.color) el.style.setProperty('--fxcolor', fx.color);
+    if(fx.delay) el.style.animationDelay = fx.delay;
+    div.insertBefore(el, insertPoint);
+  });
 }
 
 function makeHotspotDOM(sceneId, h){
@@ -3895,6 +3946,49 @@ function wireWordBank(){
   });
 }
 wireWordBank();
+
+/* ============================================================
+   EXPANSION: ambient scene animation. The photo backgrounds stay
+   completely still; a handful of small regions on top of them
+   don't -- a terminal flickers, a bank of camera monitors scans,
+   a neon sign pulses, an LED blinks. Coordinates were measured
+   directly against each room's actual art, not guessed.
+   ============================================================ */
+function wireSceneFX(){
+  const FX = {
+    security: [
+      {x:64, y:47, w:24, h:38, type:'terminal'},                 // the fingerprint-scan screen
+      {x:24, y:71, w:8,  h:9,  type:'blip', color:'#5fe08a'},     // turnstile digital readout
+      {x:62, y:1,  w:22, h:5,  type:'light', color:'#bfe8ff'},    // overhead strip light
+    ],
+    goonpost: [
+      {x:53, y:19, w:24, h:34, type:'camera'},                    // the CCTV monitor wall
+      {x:43, y:2,  w:3,  h:6,  type:'blip', color:'#ff3ec9'},     // red door indicator
+    ],
+    cablefarm: [
+      {x:66, y:1,  w:28, h:27, type:'terminal'},                  // status panel behind the cable pile
+    ],
+    warroom: [
+      {x:77, y:8,  w:22, h:30, type:'terminal'},                  // the Wall of Sheep monitor
+    ],
+    ctfpuzzle: [
+      {x:2,  y:27, w:8,  h:16, type:'blip', color:'#ff3ec9'},     // red LED cluster, left console
+      {x:16, y:10, w:82, h:74, type:'camera'},                    // slow scan sweep across the network map
+    ],
+    exterior77: [
+      {x:48, y:1,  w:40, h:18, type:'light', color:'#3ee6e6'},    // the CYBERSEC '77 marquee
+    ],
+  };
+
+  Object.entries(FX).forEach(([id, fx])=>{
+    const sc = scenes.find(s=>s.id===id);
+    if(!sc) return;
+    sc.fx = fx;
+    const el = document.getElementById('scene-'+id);
+    if(el) renderFx(el, sc);   // these 6 rooms already rendered their backdrop before fx existed
+  });
+}
+wireSceneFX();
 
 
 /* --- terminal wiring --- */
