@@ -3795,6 +3795,107 @@ function wireNewAssetContent(){
 }
 wireNewAssetContent();
 
+/* ============================================================
+   EXPANSION: a shared word bank of real ShmooCon, HackMiami, and
+   HOPE history, recognized by every NPC via an ELIZA-style keyword
+   scan -- not therapy-bot reflection, just the same core mechanism
+   Weizenbaum used: scan the input for a recognized keyword anywhere
+   in it, and answer from what's on file. This is meant to feel like
+   asking any random attendee something and getting a real answer,
+   because at a real con, most attendees actually would know these.
+   Checked only when an NPC's own specific topics don't match, so
+   existing character-specific dialogue always takes priority.
+   ============================================================ */
+const CON_LORE_BANK = [
+  { id:'shmoocon', patterns:['shmoocon'],
+    lines:['"ShmooCon. DC-area con, ran 2005 to 2025, Bruce and Heidi Potter\'s thing. First one pulled 400 people; by the end it was pushing 2,200 a year and still felt like a living room."'] },
+  { id:'shmoogroup', patterns:['shmoo group','the shmoo group'],
+    lines:['"The Shmoo Group. Volunteer infosec professionals who ran ShmooCon as a side project for twenty years and never once made it feel like a side project."'] },
+  { id:'onetrackmind', patterns:['one track mind','onetrackmind'],
+    lines:['"One Track Mind — ShmooCon\'s Friday. A single track, back to back, nothing but speed talks. No picking between rooms, because there was only one room."'] },
+  { id:'shmooclosure', patterns:['shmoocon closed','shmoocon ended','shmoocon closure','last shmoocon','final shmoocon'],
+    lines:['"Twentieth and final ShmooCon was January 2025. Bruce called it a commencement, not a wake — graduation, not a funeral. \'Less Moose Than Ever\' was the last tagline. Twenty years, they went out exactly the way they ran it: on their own terms."'] },
+  { id:'shmootix', patterns:['shmoocon tickets','shmoocon registration'],
+    lines:['"Every ShmooCon sold out since 2007. Tickets went in tranches and each batch was gone in seconds — people had scripts for it, the way some people have scripts for concert tickets."'] },
+  { id:'pottersbio', patterns:['bruce potter','heidi potter','the potters'],
+    lines:['"Met in Alaska, in college. Both dropped out right before graduating, found a pile of like-minded security people, and about a decade later that turned into ShmooCon. Not the origin story you\'d expect, and somehow the most on-brand one possible."'] },
+  { id:'hackmiami', patterns:['hackmiami','hack miami'],
+    lines:['"HackMiami. Started 2008 as biweekly meetups at FIU, incorporated as a real org in 2009. Rod Soto and Alex Heid are the names behind it. The original plan was a physical hackerspace — that part never quite happened, the conference did instead."'] },
+  { id:'kandk', patterns:['kommand','kontroll','k&&k','k and k ctf'],
+    lines:['"Kommand && Kontroll. Rod Soto\'s CTF — realistic scenarios, real vulnerability classes, not capture-the-flag-as-trivia-night. He designed it after winning the Black Hat Vegas CTF himself in 2012, so he built the thing he wished he\'d been playing."'] },
+  { id:'hackmiami1101', patterns:['hackmiami 1101','1101','thirteenth hackmiami','hackmiami thirteen'],
+    lines:['"1101 in binary is thirteen — that was this year\'s HackMiami, May at the Marenas Beach Resort. Ryan Montgomery keynoted — Pentester.com, ranked first on TryHackMe, and he runs the Sentinel Foundation on the side hunting predators. Sessions ran through agentic red-team tooling, AI social engineering, the whole current wave."'] },
+  { id:'winterhackerfest', patterns:['winter hacker festival','hackers and rappers','hackers rappers'],
+    lines:['"2013, HackMiami threw something called the Winter Hacker Festival — hackers and rappers on the same bill, celebrating underground internet culture as one scene instead of two. Very Miami. Nowhere else does that pairing make sense and here it just did."'] },
+  { id:'hope1994', patterns:['first hope','hope 1994','hope started'],
+    lines:['"First HOPE was August 1994, Hotel Pennsylvania, timed to 2600\'s tenth anniversary. Small, scrappy, run by people who\'d never organized a conference before. Nobody involved expected it to still be running three decades later."'] },
+  { id:'offthehook', patterns:['off the hook','off-the-hook radio'],
+    lines:['"Off The Hook. WBAI radio, hosted by Emmanuel Goldstein, on the air since October 1988 — six years before the first HOPE existed. The radio show is older than the con it eventually spun into."'] },
+  { id:'hotelpenn', patterns:['hotel pennsylvania','penn15','hotel penn'],
+    lines:['"Hotel Pennsylvania hosted every HOPE from 1994 through 2018. Then it got demolished for a tower they actually named Penn15. You cannot write hacker-con jokes better than reality occasionally writes them for free."'] },
+  { id:'hopenames', patterns:['hope names','beyond hope','next hope','last hope','a new hope','hope number nine','h2k','hope naming'],
+    lines:['"Every HOPE has its own pun name and they never run out. Beyond HOPE, H2K, H2K2, The Fifth HOPE, HOPE Number Six, The Last HOPE, The Next HOPE, HOPE Number Nine, HOPE X, A New HOPE — yes, the Star Wars one is deliberate, no, they are not embarrassed about it."'] },
+  { id:'bernies', patterns:['bernie s','bernies','red box','ed cummings'],
+    lines:['"Bernie S. Ed Cummings, real name. Off The Hook regular. Secret Service arrested him in 1995 over a non-functional RadioShack red box — a tone dialer, not even a working one — and he did fourteen months across five maximum-security prisons for it. He came back and gave a talk at HOPE Number Six in 2006 called Hackers In Prison. The community did not forget."'] },
+];
+
+function wordBankLookup(q){
+  if(!q) return null;
+  // tier 1: exact match on some keyword -- always wins outright
+  for(const entry of CON_LORE_BANK){
+    if(entry.patterns.includes(q)) return entry;
+  }
+  // tier 2: the query contains a whole keyword -- prefer the longest (most specific) keyword found
+  let best = null, bestLen = 0;
+  CON_LORE_BANK.forEach(entry=>{
+    entry.patterns.forEach(p=>{
+      if(q.includes(p) && p.length > bestLen){ bestLen = p.length; best = entry; }
+    });
+  });
+  if(best) return best;
+  // tier 3: the query is a fragment of a longer keyword -- prefer the shortest (least speculative) keyword
+  let bestShort = null, bestShortLen = Infinity;
+  CON_LORE_BANK.forEach(entry=>{
+    entry.patterns.forEach(p=>{
+      if(p.includes(q) && p.length < bestShortLen){ bestShortLen = p.length; bestShort = entry; }
+    });
+  });
+  return bestShort;
+}
+
+function wireWordBank(){
+  askAbout = function(who, topic){
+    const found = findNpc(who);
+    if(!found){ say('Nobody here by that name.', 'bad'); return; }
+    const [key, npc] = found;
+    if(npc.room !== state.current){ say(`${npc.name} is not in this room.`, 'bad'); return; }
+    const q = (topic||'').toLowerCase().replace(/^(the|about)\s+/,'').trim();
+    if(!q){ listTopics(key, npc); return; }
+    const tk = Object.keys(npc.topics).find(k=>k===q||k.startsWith(q)||q.startsWith(k)||npc.topics[k][0].toLowerCase().includes(q));
+    if(tk){
+      const entry = npc.topics[tk];
+      speak(npc, entry.slice(1));
+      markAsked(key, tk);
+      return;
+    }
+    const hit = wordBankLookup(q);
+    if(hit){
+      speak(npc, hit.lines);
+      markAsked(key, 'lore:'+hit.id);
+      return;
+    }
+    speak(npc, npc.fallback);
+  };
+
+  Object.assign(LORE, {
+    shmoocon:`<b>ShmooCon</b> (2005–2025) — a Washington DC-area hacker con founded and run for twenty years by Bruce and Heidi Potter under The Shmoo Group banner. Grew from 400 attendees in 2005 to roughly 2,200 by its later years; every ticket batch sold out in seconds, every year, since 2007. Its Friday "One Track Mind" ran nothing but back-to-back speed talks in a single room. Closed with its 20th edition on January 12, 2025 — framed deliberately as a "commencement ceremony," not a farewell, with the tagline "Less Moose Than Ever."`,
+    hackmiami:`<b>HackMiami</b> — founded by Rod Soto and Alexander Heid, starting as biweekly FIU student meetups in 2008 and incorporating in 2009. Focus areas include malware analysis, botnets, web application security, and cybercrime research. Rod Soto also created the Kommand && Kontroll (K&&K) CTF after winning Black Hat Las Vegas's own CTF in 2012. The 2026 edition, HackMiami 1101 (binary for 13), ran May 12–16 at the Marenas Beach Resort in Sunny Isles Beach, keynoted by Ryan Montgomery (Pentester.com co-founder, #1 on TryHackMe, CTO of the Sentinel Foundation) with sessions on agentic red-team tooling, AI-driven social engineering, and AI governance.`,
+    hope:`<b>HOPE (Hackers On Planet Earth)</b> — produced by 2600: The Hacker Quarterly since its first edition in August 1994 at Manhattan's Hotel Pennsylvania, timed to 2600's 10th anniversary. Hotel Pennsylvania hosted every HOPE through 2018, before being demolished for a tower punningly named Penn15. Each edition gets its own pun name — Beyond HOPE, H2K, H2K2, The Fifth HOPE, HOPE Number Six, The Last HOPE, The Next HOPE, HOPE Number Nine, HOPE X, A New HOPE, on through HOPE 26 — deliberately riffing on the Star Wars title. The companion radio show, Off The Hook (WBAI, hosted by Emmanuel Goldstein), predates the conference itself, first airing in October 1988.`,
+    bernies:`<b>Bernie S. (Ed Cummings)</b> — an Off The Hook radio regular arrested by the US Secret Service in 1995 over possession of a non-functional RadioShack "red box" tone dialer, serving fourteen months across five maximum-security federal facilities. Became a rallying figure in the 1990s hacker community; returned to speak at HOPE Number Six in 2006 in a talk titled "Hackers In Prison."`,
+  });
+}
+wireWordBank();
+
 
 /* --- terminal wiring --- */
 termIn.addEventListener('keydown', e=>{
